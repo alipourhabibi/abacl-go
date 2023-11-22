@@ -26,7 +26,7 @@ func Key(policy policy.Policy) string {
 	if len(acts) == 1 {
 		acts = append(acts, ACT)
 	}
-	key := fmt.Sprintf("%s:%s:%s:%s:%s:%s", subs[0], subs[1], objs[0], objs[1], acts[0], acts[1])
+	key := fmt.Sprintf("%s:%s:%s:%s:%s:%s", subs[0], subs[1], acts[0], acts[1], objs[0], objs[1])
 	return key
 }
 
@@ -44,8 +44,8 @@ func PolicyStrictify(pol policy.Policy) policy.Policy {
 		acts = append(acts, ACT)
 	}
 	return policy.Policy{
-		Subject: fmt.Sprintf("%s:%s", subs[0], ".*"),
-		Object:  fmt.Sprintf("%s:%s", objs[0], ".*"),
-		Action:  fmt.Sprintf("%s:%s", acts[0], ".*"),
+		Subject: fmt.Sprintf("%s:%s", subs[0], "\\w+"),
+		Object:  fmt.Sprintf("%s:%s", objs[0], "\\w+"),
+		Action:  fmt.Sprintf("%s:%s", acts[0], "\\w+"),
 	}
 }

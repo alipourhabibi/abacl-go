@@ -50,14 +50,16 @@ func (a *AccessControl) Get(strict bool, policy policy.Policy) ([]policy.Policy,
 	// TODO
 	if !strict {
 		p := utils.PolicyStrictify(policy)
-		fmt.Println(">>", p)
 		return a.driver.Get(p)
 	}
 	return a.driver.Get(policy)
 }
 
-func (a *AccessControl) Can(sub []string, obj, act string) (*permission.Permission, error) {
+func (a *AccessControl) Can(sub []string, act, obj string, options ...bool) (*permission.Permission, error) {
 	strict := a.options.Strict
+	if len(options) != 0 {
+		strict = options[0]
+	}
 	if len(sub) == 0 {
 		return nil, fmt.Errorf("No subjects given")
 	}
@@ -96,7 +98,6 @@ func (a *AccessControl) Can(sub []string, obj, act string) (*permission.Permissi
 	*/
 
 	pols := []policy.Policy{}
-	fmt.Println("KEYS", keys)
 	for _, v := range keys {
 		pol, ok := a.Get(strict, v)
 		if ok {
