@@ -13,6 +13,13 @@ const (
 	ACT = "ALL"
 )
 
+type CacheKey struct {
+	Subject string
+	Object  string
+	Action  string
+	Strict  bool
+}
+
 func Key(policy policy.Policy) string {
 	subs := strings.Split(policy.Subject, ":")
 	if len(subs) == 1 {
