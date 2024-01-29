@@ -41,3 +41,7 @@ func (m Memory) Get(pol policy.Policy) ([]policy.Policy, bool) {
 	}
 	return pols, len(pols) != 0
 }
+
+func (m Memory) GetALL() Memory {
+	return m
+}

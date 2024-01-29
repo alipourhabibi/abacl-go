@@ -18,11 +18,20 @@ type Grant struct {
 	present  map[string]policy.Policy
 }
 
+func (g *Grant) GetPresent() map[string]policy.Policy {
+	return g.present
+}
+
 func NewGrant(pols []policy.Policy, strict bool) (*Grant, error) {
-	return &Grant{
+	grant := &Grant{
 		policies: pols,
 		strict:   strict,
-	}, nil
+	}
+	grant.present = map[string]policy.Policy{}
+	for _, v := range pols {
+		grant.Update(v)
+	}
+	return grant, nil
 }
 
 func (g *Grant) GetAll() []policy.Policy {
@@ -178,17 +187,17 @@ func (g *Grant) Scopes(cKey *utils.CacheKey, prop string) []string {
 			switch prop {
 			case "subject":
 				s := g.parse(p.Subject)
-				if s[1] != "" {
+				if len(s) > 1 && s[1] != "" {
 					scopeSet = append(scopeSet, s[1])
 				}
 			case "object":
 				s := g.parse(p.Object)
-				if s[1] != "" {
+				if len(s) > 1 && s[1] != "" {
 					scopeSet = append(scopeSet, s[1])
 				}
 			case "action":
 				s := g.parse(p.Action)
-				if s[1] != "" {
+				if len(s) > 1 && s[1] != "" {
 					scopeSet = append(scopeSet, s[1])
 				}
 			}
@@ -206,21 +215,23 @@ func (g *Grant) Scopes(cKey *utils.CacheKey, prop string) []string {
 		} else {
 			newPols, _ = g.Get(cKeyPol)
 		}
+
+		// newPols = append(newPols, cKeyPol)
 		for _, p := range newPols {
 			switch prop {
 			case "subject":
 				s := g.parse(p.Subject)
-				if s[1] != "" {
+				if len(s) > 1 && s[1] != "" {
 					scopeSet = append(scopeSet, s[1])
 				}
 			case "object":
 				s := g.parse(p.Object)
-				if s[1] != "" {
+				if len(s) > 1 && s[1] != "" {
 					scopeSet = append(scopeSet, s[1])
 				}
 			case "action":
 				s := g.parse(p.Action)
-				if s[1] != "" {
+				if len(s) > 1 && s[1] != "" {
 					scopeSet = append(scopeSet, s[1])
 				}
 			}
