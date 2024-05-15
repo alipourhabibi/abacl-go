@@ -253,7 +253,7 @@ func (g *Grant) Subjects(cKey *utils.CacheKey) []string {
 			Object:  cKey.Object,
 			Action:  cKey.Action,
 		}
-		if !g.strict {
+		if g.strict {
 			p := utils.PolicyStrictify(cKeyPol)
 			newPols, _ = g.Get(p)
 		} else {

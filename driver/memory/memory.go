@@ -10,6 +10,7 @@ import (
 type Memory map[string]policy.Policy
 
 func (m Memory) Clear() {
+
 	m = make(Memory, 0)
 }
 

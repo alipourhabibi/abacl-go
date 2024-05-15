@@ -3,7 +3,7 @@ module github.com/alipourhabibi/abacl-go
 go 1.21.1
 
 require (
-	github.com/alipourhabibi/gonotation v0.0.0-20230827120221-39c7290d1eb0
+	github.com/alipourhabibi/gonotation v0.0.2
 	github.com/stretchr/testify v1.8.4
 	golang.org/x/exp v0.0.0-20231110203233-9a3e6036ecaa
 )
@@ -18,5 +18,3 @@ require (
 	github.com/tidwall/sjson v1.2.5 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
-
-replace github.com/alipourhabibi/gonotation v0.0.0-20230827120221-39c7290d1eb0 => /home/ali/go/src/github.com/alipourhabibi/gonotation

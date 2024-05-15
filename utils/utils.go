@@ -50,6 +50,7 @@ func PolicyStrictify(pol policy.Policy) policy.Policy {
 	if len(acts) == 1 {
 		acts = append(acts, ACT)
 	}
+
 	return policy.Policy{
 		Subject: fmt.Sprintf("%s:%s", subs[0], "\\w+"),
 		Object:  fmt.Sprintf("%s:%s", objs[0], "\\w+"),
