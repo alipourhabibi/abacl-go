@@ -1,14 +1,12 @@
 package grant
 
 import (
-	"encoding/json"
 	"regexp"
 	"strings"
 
 	"github.com/alipourhabibi/abacl-go/policy"
 	"github.com/alipourhabibi/abacl-go/utils"
-	"github.com/alipourhabibi/gonotation/glob"
-	"github.com/alipourhabibi/gonotation/notation"
+	"github.com/alipourhabibi/gonotation/v2/notation"
 	"golang.org/x/exp/maps"
 )
 
@@ -53,44 +51,15 @@ func (g *Grant) Delete(policy policy.Policy) {
 }
 
 func (g *Grant) Filter(data any) (map[string]any, error) {
-	mapDatas := map[string]interface{}{}
+	filters := []string{}
 	for _, v := range g.policies {
-		globs := []glob.Glob{}
-		for _, vv := range v.Filter {
-			globs = append(globs, glob.NewGlob(vv))
-		}
-		data, err := g.filterOne(data, globs)
-		if err != nil {
-			return nil, err
-		}
-		if data != nil {
-			t := map[string]interface{}{}
-			err = json.Unmarshal([]byte(data.(string)), &t)
-			if err != nil {
-				return nil, err
-			}
-			for k, vv := range t {
-				mapDatas[k] = vv
-			}
-		}
+		filters = append(filters, v.Field...)
 	}
-	return mapDatas, nil
+	return notation.FilterMap(data, filters)
 }
 
-func (g *Grant) filterOne(data any, globs []glob.Glob) (any, error) {
-	if len(globs) == 0 {
-		return nil, nil
-	}
-	d, err := json.Marshal(data)
-	if err != nil {
-		return nil, err
-	}
-	nn := notation.New(string(d))
-	ss, err := nn.Filter(globs, false)
-	if err != nil {
-		return nil, err
-	}
-	return ss, nil
+func (g *Grant) filterOne(data any, globs []string) (any, error) {
+	return notation.FilterMap(data, globs)
 }
 
 func (g *Grant) FieldByCKey(data any, cKey utils.CacheKey) (map[string]any, error) {
@@ -114,70 +83,34 @@ func (g *Grant) FieldByCKey(data any, cKey utils.CacheKey) (map[string]any, erro
 	}
 	mapDatas := map[string]interface{}{}
 	for _, v := range newPols {
-		globs := []glob.Glob{}
+		globs := []string{}
 		if v.Field == nil {
-			globs = append(globs, glob.NewGlob("*"))
+			globs = append(globs, "*")
 		}
 		for _, vv := range v.Field {
-			globs = append(globs, glob.NewGlob(vv))
+			globs = append(globs, vv)
 		}
 		data, err := g.fieldOne(data, globs)
 		if err != nil {
 			return nil, err
 		}
-		if data != nil {
-			t := map[string]interface{}{}
-			err = json.Unmarshal([]byte(data.(string)), &t)
-			if err != nil {
-				return nil, err
-			}
-			for k, vv := range t {
-				mapDatas[k] = vv
-			}
+		for k, vv := range data.(map[string]any) {
+			mapDatas[k] = vv
 		}
 	}
 	return mapDatas, nil
 }
 
 func (g *Grant) Field(data any) (map[string]any, error) {
-	mapDatas := map[string]interface{}{}
+	fields := []string{}
 	for _, v := range g.policies {
-		globs := []glob.Glob{}
-		for _, vv := range v.Field {
-			globs = append(globs, glob.NewGlob(vv))
-		}
-		data, err := g.fieldOne(data, globs)
-		if err != nil {
-			return nil, err
-		}
-		if data != nil {
-			t := map[string]interface{}{}
-			err = json.Unmarshal([]byte(data.(string)), &t)
-			if err != nil {
-				return nil, err
-			}
-			for k, vv := range t {
-				mapDatas[k] = vv
-			}
-		}
+		fields = append(fields, v.Field...)
 	}
-	return mapDatas, nil
+	return notation.FilterMap(data, fields)
 }
 
-func (g *Grant) fieldOne(data any, globs []glob.Glob) (any, error) {
-	if len(globs) == 0 {
-		return nil, nil
-	}
-	d, err := json.Marshal(data)
-	if err != nil {
-		return nil, err
-	}
-	nn := notation.New(string(d))
-	ss, err := nn.Filter(globs, false)
-	if err != nil {
-		return nil, err
-	}
-	return ss, nil
+func (g *Grant) fieldOne(data any, globs []string) (any, error) {
+	return notation.FilterMap(data, globs)
 }
 
 func (g *Grant) Scopes(cKey *utils.CacheKey, prop string) []string {
@@ -253,7 +186,7 @@ func (g *Grant) Subjects(cKey *utils.CacheKey) []string {
 			Object:  cKey.Object,
 			Action:  cKey.Action,
 		}
-		if g.strict {
+		if !cKey.Strict {
 			p := utils.PolicyStrictify(cKeyPol)
 			newPols, _ = g.Get(p)
 		} else {
