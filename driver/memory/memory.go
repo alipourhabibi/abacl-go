@@ -1,48 +1,97 @@
+// driver/memory/memory.go
 package memory
 
 import (
-	"regexp"
+	"fmt"
+	"sync"
 
 	"github.com/alipourhabibi/abacl-go/policy"
-	"github.com/alipourhabibi/abacl-go/utils"
 )
 
-type Memory map[string]policy.Policy
-
-func (m Memory) Clear() {
-
-	m = make(Memory, 0)
+// MemoryDriver provides an in-memory implementation of the Driver interface
+type MemoryDriver struct {
+	mu       sync.RWMutex
+	policies map[string]policy.Policy
 }
 
-func (m Memory) Set(policy policy.Policy) {
-	m[utils.Key(policy)] = policy
+// NewMemoryDriver creates a new in-memory driver
+func NewMemoryDriver() *MemoryDriver {
+	return &MemoryDriver{
+		policies: make(map[string]policy.Policy),
+	}
 }
 
-func (m Memory) Exists(policy policy.Policy) bool {
-	_, ok := m[utils.Key(policy)]
+func (m *MemoryDriver) Set(p policy.Policy) error {
+	if err := p.Validate(); err != nil {
+		return fmt.Errorf("invalid policy: %w", err)
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.policies[p.Key()] = p
+	return nil
+}
+
+func (m *MemoryDriver) Get(key string) (policy.Policy, bool) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	p, ok := m.policies[key]
+	return p, ok
+}
+
+func (m *MemoryDriver) Match(pattern *policy.Policy, strict bool) ([]policy.Policy, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	var results []policy.Policy
+
+	// Generate regex pattern from the query policy
+	re := pattern.MatchPattern(strict)
+
+	// Match against all stored policies
+	for _, p := range m.policies {
+		if re.MatchString(p.Key()) {
+			results = append(results, p)
+		}
+	}
+
+	return results, nil
+}
+
+func (m *MemoryDriver) Delete(key string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	delete(m.policies, key)
+	return nil
+}
+
+func (m *MemoryDriver) Exists(key string) bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	_, ok := m.policies[key]
 	return ok
 }
 
-func (m Memory) Del(policy policy.Policy) {
-	delete(m, utils.Key(policy))
+func (m *MemoryDriver) Clear() error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	// Correctly clear the map
+	m.policies = make(map[string]policy.Policy)
+	return nil
 }
 
-func (m Memory) Update(policy policy.Policy) {
-	m[utils.Key(policy)] = policy
-}
+func (m *MemoryDriver) List() []string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 
-func (m Memory) Get(pol policy.Policy) ([]policy.Policy, bool) {
-	key := utils.Key(pol)
-	pols := []policy.Policy{}
-	for k := range m {
-		ok, _ := regexp.MatchString(key, k)
-		if ok {
-			pols = append(pols, m[k])
-		}
+	keys := make([]string, 0, len(m.policies))
+	for k := range m.policies {
+		keys = append(keys, k)
 	}
-	return pols, len(pols) != 0
-}
-
-func (m Memory) GetALL() Memory {
-	return m
+	return keys
 }
