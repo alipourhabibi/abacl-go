@@ -21,7 +21,7 @@ func TestGrant_Field(t *testing.T) {
 	g, err := New(policies, false)
 	require.NoError(t, err)
 
-	data := map[string]interface{}{
+	data := map[string]any{
 		"id":            123,
 		"title":         "Test Article",
 		"content":       "Content here",
@@ -56,7 +56,7 @@ func TestGrant_Filter(t *testing.T) {
 	g, err := New(policies, false)
 	require.NoError(t, err)
 
-	data := map[string]interface{}{
+	data := map[string]any{
 		"id":     123,
 		"owner":  "john@example.com",
 		"status": "published",
@@ -97,7 +97,7 @@ func TestGrant_FieldByCKey(t *testing.T) {
 	g, err := New(policies, false)
 	require.NoError(t, err)
 
-	data := map[string]interface{}{
+	data := map[string]any{
 		"id":       123,
 		"title":    "Test",
 		"content":  "Content",
@@ -188,7 +188,7 @@ func TestGrant_FilterByCKey(t *testing.T) {
 	g, err := New(policies, false)
 	require.NoError(t, err)
 
-	data := map[string]interface{}{
+	data := map[string]any{
 		"id":     123,
 		"owner":  "john@example.com",
 		"status": "pending",
@@ -222,7 +222,7 @@ func TestGrant_FieldAndFilter_Separate(t *testing.T) {
 	g, err := New(policies, false)
 	require.NoError(t, err)
 
-	data := map[string]interface{}{
+	data := map[string]any{
 		"id":      1,
 		"title":   "Document",
 		"content": "Content",
@@ -272,7 +272,7 @@ func TestGrant_FieldByCKey_StrictMode(t *testing.T) {
 	g, err := New(policies, true)
 	require.NoError(t, err)
 
-	data := map[string]interface{}{
+	data := map[string]any{
 		"title":   "Test",
 		"content": "Content",
 	}
@@ -322,7 +322,7 @@ func TestGrant_MultipleFieldPatterns(t *testing.T) {
 	g, err := New(policies, false)
 	require.NoError(t, err)
 
-	data := map[string]interface{}{
+	data := map[string]any{
 		"title":       "Test",
 		"content":     "Content",
 		"status":      "approved",
@@ -358,7 +358,7 @@ func TestGrant_NoFieldRestrictions(t *testing.T) {
 	g, err := New(policies, false)
 	require.NoError(t, err)
 
-	data := map[string]interface{}{
+	data := map[string]any{
 		"id":       123,
 		"title":    "Test",
 		"password": "secret",

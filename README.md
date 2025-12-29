@@ -62,7 +62,7 @@ func main() {
     // Check read permission and filter response
     readPerm, _ := ac.Check([]string{"user"}, "read", "article")
     if readPerm.Granted() {
-        responseData := map[string]interface{}{
+        responseData := map[string]any{
             "id":            1,
             "title":         "My Article",
             "password":      "secret123",
@@ -78,7 +78,7 @@ func main() {
     // Check update permission and filter modifiable fields
     updatePerm, _ := ac.Check([]string{"user"}, "update", "article")
     if updatePerm.Granted() {
-        updateRequest := map[string]interface{}{
+        updateRequest := map[string]any{
             "title":   "Updated Title",
             "content": "Updated Content",
             "id":      999, // Attempting to change ID
@@ -179,7 +179,7 @@ ac, _ := acl.New(policies, acl.Options{}, memory.NewMemoryDriver())
 perm, _ := ac.Check([]string{"user"}, "read", "profile")
 
 // Data from database
-userData := map[string]interface{}{
+userData := map[string]any{
     "name":       "John Doe",
     "email":      "john@example.com",
     "avatar":     "https://example.com/avatar.jpg",
@@ -209,7 +209,7 @@ ac, _ := acl.New(policies, acl.Options{}, memory.NewMemoryDriver())
 perm, _ := ac.Check([]string{"user"}, "update", "article")
 
 // User's update request
-updateData := map[string]interface{}{
+updateData := map[string]any{
     "title":     "New Title",
     "content":   "New Content",
     "id":        999,              // Trying to change ID
@@ -381,7 +381,7 @@ func main() {
     // Author creates article
     createPerm, _ := ac.Check([]string{"author"}, "create", "article")
     if createPerm.Granted() {
-        newArticle := map[string]interface{}{
+        newArticle := map[string]any{
             "title":     "My Article",
             "content":   "Content here",
             "id":        123,           // Will be filtered out
