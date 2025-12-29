@@ -1,4 +1,3 @@
-// driver/driver.go
 package driver
 
 import "github.com/alipourhabibi/abacl-go/policy"
@@ -11,8 +10,8 @@ type Driver interface {
 	// Get retrieves a specific policy by key
 	Get(key string) (policy.Policy, bool)
 
-	// Match searches for policies matching a pattern
-	Match(pattern *policy.Policy, strict bool) ([]policy.Policy, error)
+	// Find searches for policies matching a pattern (using regex on keys)
+	Find(patternPolicy policy.Policy) ([]policy.Policy, error)
 
 	// Delete removes a policy
 	Delete(key string) error

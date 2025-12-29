@@ -1,4 +1,3 @@
-// permission/permission.go
 package permission
 
 import "github.com/alipourhabibi/abacl-go/grant"
@@ -33,7 +32,6 @@ func (p *Permission) Grant() *grant.Grant {
 }
 
 // Field is a convenience method to filter fields using the grant
-// Use this to apply field visibility rules (what fields can be accessed)
 func (p *Permission) Field(data any) (map[string]any, error) {
 	if !p.granted || p.grant == nil {
 		return nil, nil
@@ -42,7 +40,6 @@ func (p *Permission) Field(data any) (map[string]any, error) {
 }
 
 // Filter is a convenience method to apply data filters using the grant
-// Use this to apply query filtering rules (what data can be accessed)
 func (p *Permission) Filter(data any) (map[string]any, error) {
 	if !p.granted || p.grant == nil {
 		return nil, nil

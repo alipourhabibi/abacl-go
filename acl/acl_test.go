@@ -1,4 +1,3 @@
-// acl/acl_test.go
 package acl
 
 import (
@@ -203,7 +202,7 @@ func TestMemoryDriver_Clear(t *testing.T) {
 	assert.True(t, drv.Exists(p.Key()))
 }
 
-func TestAccessControl_Query(t *testing.T) {
+func TestAccessControl_Get(t *testing.T) {
 	drv := memory.NewMemoryDriver()
 	opts := Options{Strict: false}
 
@@ -229,13 +228,23 @@ func TestAccessControl_Query(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("find all read actions for user", func(t *testing.T) {
-		results, err := ac.Query("user", "read", "article", false)
+		searchPol := policy.Policy{
+			Subject: "user",
+			Action:  "read",
+			Object:  "article",
+		}
+		results, err := ac.Get(false, searchPol)
 		require.NoError(t, err)
 		assert.Len(t, results, 2, "should find both read:own and read:shared")
 	})
 
 	t.Run("strict matching", func(t *testing.T) {
-		results, err := ac.Query("user", "read:own", "article", true)
+		searchPol := policy.Policy{
+			Subject: "user",
+			Action:  "read:own",
+			Object:  "article",
+		}
+		results, err := ac.Get(true, searchPol)
 		require.NoError(t, err)
 		assert.Len(t, results, 1, "should only find exact match")
 	})
@@ -259,6 +268,7 @@ func BenchmarkAccessControl_Check(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = ac.Check([]string{"user"}, "read", "article")
+		_, err := ac.Check([]string{"user"}, "read", "article")
+		require.NoError(b, err)
 	}
 }

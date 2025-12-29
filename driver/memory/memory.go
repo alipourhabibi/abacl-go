@@ -1,8 +1,8 @@
-// driver/memory/memory.go
 package memory
 
 import (
 	"fmt"
+	"regexp"
 	"sync"
 
 	"github.com/alipourhabibi/abacl-go/policy"
@@ -41,18 +41,23 @@ func (m *MemoryDriver) Get(key string) (policy.Policy, bool) {
 	return p, ok
 }
 
-func (m *MemoryDriver) Match(pattern *policy.Policy, strict bool) ([]policy.Policy, error) {
+// Find searches for policies using regex matching on keys
+// This is your original implementation that worked
+func (m *MemoryDriver) Find(patternPolicy policy.Policy) ([]policy.Policy, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
+	// Get the pattern key (which may contain regex like \w+)
+	patternKey := patternPolicy.Key()
+
+	re, err := regexp.Compile(patternKey)
+	if err != nil {
+		return nil, fmt.Errorf("invalid pattern: %w", err)
+	}
+
 	var results []policy.Policy
-
-	// Generate regex pattern from the query policy
-	re := pattern.MatchPattern(strict)
-
-	// Match against all stored policies
-	for _, p := range m.policies {
-		if re.MatchString(p.Key()) {
+	for key, p := range m.policies {
+		if re.MatchString(key) {
 			results = append(results, p)
 		}
 	}

@@ -1,4 +1,3 @@
-// acl/acl.go
 package acl
 
 import (
@@ -64,19 +63,23 @@ func (ac *AccessControl) Clear() error {
 	return ac.driver.Clear()
 }
 
-// Query searches for policies matching the given criteria
-func (ac *AccessControl) Query(subject, action, object string, strict bool) ([]policy.Policy, error) {
-	queryPolicy := policy.Policy{
-		Subject: subject,
-		Action:  action,
-		Object:  object,
+// Get searches for policies matching the given criteria
+// This uses your original strictify logic
+func (ac *AccessControl) Get(strict bool, pol policy.Policy) ([]policy.Policy, error) {
+	var searchPolicy policy.Policy
+
+	if !strict {
+		// Use strictify to add regex wildcards
+		searchPolicy = pol.Strictify()
+	} else {
+		searchPolicy = pol
 	}
 
-	return ac.driver.Match(&queryPolicy, strict)
+	return ac.driver.Find(searchPolicy)
 }
 
 // Check evaluates if the given subjects have permission to perform an action on an object
-// Returns a Permission object containing the result and applicable grants
+// This is your original Can() method with better naming
 func (ac *AccessControl) Check(subjects []string, action, object string) (*permission.Permission, error) {
 	return ac.CheckWithOptions(subjects, action, object, ac.opts.Strict)
 }
@@ -93,10 +96,16 @@ func (ac *AccessControl) CheckWithOptions(subjects []string, action, object stri
 		return nil, fmt.Errorf("object cannot be empty")
 	}
 
-	// Collect all matching policies for all subjects
+	// Generate search keys for each subject (your original logic)
 	var allPolicies []policy.Policy
 	for _, subject := range subjects {
-		policies, err := ac.Query(subject, action, object, strict)
+		pol := policy.Policy{
+			Subject: subject,
+			Object:  object,
+			Action:  action,
+		}
+
+		policies, err := ac.Get(strict, pol)
 		if err != nil {
 			return nil, fmt.Errorf("query failed for subject %s: %w", subject, err)
 		}
@@ -104,13 +113,11 @@ func (ac *AccessControl) CheckWithOptions(subjects []string, action, object stri
 	}
 
 	// Create grant from matched policies
+	granted := len(allPolicies) > 0
 	g, err := grant.New(allPolicies, strict)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create grant: %w", err)
 	}
-
-	// Permission is granted if we found any matching policies
-	granted := len(allPolicies) > 0
 
 	return permission.New(granted, g), nil
 }

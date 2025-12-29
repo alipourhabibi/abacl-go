@@ -1,7 +1,9 @@
-// grant/grant.go
 package grant
 
 import (
+	"regexp"
+	"strings"
+
 	"github.com/alipourhabibi/abacl-go/policy"
 	"github.com/alipourhabibi/gonotation/v2/notation"
 )
@@ -10,19 +12,63 @@ import (
 type Grant struct {
 	strict   bool
 	policies []policy.Policy
+	present  map[string]policy.Policy
 }
 
 // New creates a new Grant from the given policies
 func New(policies []policy.Policy, strict bool) (*Grant, error) {
-	return &Grant{
+	grant := &Grant{
 		policies: policies,
 		strict:   strict,
-	}, nil
+		present:  make(map[string]policy.Policy),
+	}
+
+	// Build present map for quick lookups
+	for _, p := range policies {
+		grant.present[p.Key()] = p
+	}
+
+	return grant, nil
+}
+
+// GetPresent returns the present map
+func (g *Grant) GetPresent() map[string]policy.Policy {
+	return g.present
 }
 
 // Policies returns all policies in this grant
 func (g *Grant) Policies() []policy.Policy {
 	return g.policies
+}
+
+// Update adds or updates a policy in the grant
+func (g *Grant) Update(p policy.Policy) {
+	g.present[p.Key()] = p
+}
+
+// Exists checks if a policy exists in the grant
+func (g *Grant) Exists(p policy.Policy) bool {
+	_, ok := g.present[p.Key()]
+	return ok
+}
+
+// Delete removes a policy from the grant
+func (g *Grant) Delete(p policy.Policy) {
+	delete(g.present, p.Key())
+}
+
+// Get finds policies matching the given policy pattern (using regex)
+func (g *Grant) Get(pol policy.Policy) ([]policy.Policy, bool) {
+	key := pol.Key()
+	pols := []policy.Policy{}
+
+	for k := range g.present {
+		ok, _ := regexp.MatchString(key, k)
+		if ok {
+			pols = append(pols, g.present[k])
+		}
+	}
+	return pols, len(pols) != 0
 }
 
 // Subjects returns all unique subjects from the grant's policies
@@ -70,95 +116,69 @@ func (g *Grant) Objects() []string {
 	return objects
 }
 
+// parse extracts main and scope from a component string
+func (g *Grant) parse(prop string) []string {
+	// 0: main
+	// 1: scope
+	return strings.Split(prop, ":")
+}
+
 // Scopes extracts unique scopes from a specific component (subject, action, or object)
-func (g *Grant) Scopes(component string) []string {
-	seen := make(map[string]bool)
-	var scopes []string
+func (g *Grant) Scopes(prop string) []string {
+	scopeSet := []string{}
 
-	for _, p := range g.policies {
-		var value string
-		switch component {
+	for _, p := range g.present {
+		switch prop {
 		case "subject":
-			value = p.Subject
-		case "action":
-			value = p.Action
+			s := g.parse(p.Subject)
+			if len(s) > 1 && s[1] != "" {
+				scopeSet = append(scopeSet, s[1])
+			}
 		case "object":
-			value = p.Object
-		default:
-			continue
-		}
-
-		_, scope := policy.ParseComponent(value)
-		if scope != "" && !seen[scope] {
-			seen[scope] = true
-			scopes = append(scopes, scope)
+			s := g.parse(p.Object)
+			if len(s) > 1 && s[1] != "" {
+				scopeSet = append(scopeSet, s[1])
+			}
+		case "action":
+			s := g.parse(p.Action)
+			if len(s) > 1 && s[1] != "" {
+				scopeSet = append(scopeSet, s[1])
+			}
 		}
 	}
 
-	return scopes
+	return scopeSet
 }
 
 // Field applies field filters from all policies to the given data
-// Field filters define which fields can be accessed (e.g., ["*", "!password"])
-// Returns a filtered map containing only allowed fields
 func (g *Grant) Field(data any) (map[string]any, error) {
-	if len(g.policies) == 0 {
-		return nil, nil
-	}
-
-	// Collect all field patterns from policies
-	var patterns []string
+	fields := []string{}
 	for _, p := range g.policies {
-		if len(p.Fields) > 0 {
-			patterns = append(patterns, p.Fields...)
-		} else {
-			// If a policy has no field restrictions, allow all
-			patterns = append(patterns, "*")
-		}
+		fields = append(fields, p.Fields...)
 	}
 
-	// If no field patterns specified, allow all
-	if len(patterns) == 0 {
-		patterns = []string{"*"}
+	if len(fields) == 0 {
+		return notation.FilterMap(data, []string{"*"})
 	}
 
-	// Remove duplicates
-	uniquePatterns := make(map[string]bool)
-	var finalPatterns []string
-	for _, p := range patterns {
-		if !uniquePatterns[p] {
-			uniquePatterns[p] = true
-			finalPatterns = append(finalPatterns, p)
-		}
-	}
-
-	return notation.FilterMap(data, finalPatterns)
+	return notation.FilterMap(data, fields)
 }
 
 // Filter applies data filters from policies
-// Filter is used for query filtering (e.g., ["status:published"])
-// This is separate from Field which controls field visibility
 func (g *Grant) Filter(data any) (map[string]any, error) {
-	if len(g.policies) == 0 {
-		return nil, nil
-	}
-
-	var patterns []string
+	filters := []string{}
 	for _, p := range g.policies {
-		if len(p.Filters) > 0 {
-			patterns = append(patterns, p.Filters...)
-		}
+		filters = append(filters, p.Filters...)
 	}
 
-	if len(patterns) == 0 {
-		// No filters means allow all
+	if len(filters) == 0 {
 		if m, ok := data.(map[string]any); ok {
 			return m, nil
 		}
 		return notation.FilterMap(data, []string{"*"})
 	}
 
-	return notation.FilterMap(data, patterns)
+	return notation.FilterMap(data, filters)
 }
 
 // CacheKey represents a query key for filtering policies
@@ -170,104 +190,103 @@ type CacheKey struct {
 }
 
 // FieldByCKey filters data based on field permissions matching a specific cache key
-// This queries the grant's policies for matches and applies their field filters
-// Use this when you need to apply field filtering for a specific subject/action/object combination
-func (g *Grant) FieldByCKey(data any, key CacheKey) (map[string]any, error) {
-	// Find matching policies based on the cache key
-	matchingPolicies := g.findMatchingPolicies(key)
-
-	if len(matchingPolicies) == 0 {
-		// No matching policies - deny all fields
-		return map[string]any{}, nil
+// This is your original implementation
+func (g *Grant) FieldByCKey(data any, cKey CacheKey) (map[string]any, error) {
+	if g.present == nil {
+		g.present = make(map[string]policy.Policy)
 	}
 
-	// Collect field patterns from all matching policies
-	fieldPatterns := []string{}
+	// Ensure present map is populated
+	for _, p := range g.policies {
+		g.Update(p)
+	}
 
-	for _, p := range matchingPolicies {
+	// Find matching policies
+	var newPols []policy.Policy
+	cKeyPol := policy.Policy{
+		Subject: cKey.Subject,
+		Object:  cKey.Object,
+		Action:  cKey.Action,
+	}
+
+	if !cKey.Strict {
+		p := cKeyPol.Strictify()
+		newPols, _ = g.Get(p)
+	} else {
+		newPols, _ = g.Get(cKeyPol)
+	}
+
+	// Collect field patterns from matching policies
+	mapDatas := map[string]any{}
+	for _, p := range newPols {
+		globs := []string{}
 		if len(p.Fields) == 0 {
-			// No field restrictions means allow all
-			fieldPatterns = append(fieldPatterns, "*")
+			globs = append(globs, "*")
 		} else {
-			fieldPatterns = append(fieldPatterns, p.Fields...)
+			globs = append(globs, p.Fields...)
+		}
+
+		data, err := notation.FilterMap(data, globs)
+		if err != nil {
+			return nil, err
+		}
+
+		for k, vv := range data {
+			mapDatas[k] = vv
 		}
 	}
 
-	// If no field patterns specified, allow all
-	if len(fieldPatterns) == 0 {
-		fieldPatterns = []string{"*"}
-	}
-
-	// Remove duplicates
-	uniquePatterns := make(map[string]bool)
-	var finalPatterns []string
-	for _, p := range fieldPatterns {
-		if !uniquePatterns[p] {
-			uniquePatterns[p] = true
-			finalPatterns = append(finalPatterns, p)
-		}
-	}
-
-	return notation.FilterMap(data, finalPatterns)
+	return mapDatas, nil
 }
 
 // FilterByCKey applies data filters matching a specific cache key
-// This is separate from FieldByCKey - it applies data filtering, not field visibility
-func (g *Grant) FilterByCKey(data any, key CacheKey) (map[string]any, error) {
-	// Find matching policies based on the cache key
-	matchingPolicies := g.findMatchingPolicies(key)
-
-	if len(matchingPolicies) == 0 {
-		// No matching policies
-		return map[string]any{}, nil
+func (g *Grant) FilterByCKey(data any, cKey CacheKey) (map[string]any, error) {
+	if g.present == nil {
+		g.present = make(map[string]policy.Policy)
 	}
-
-	// Collect filter patterns from all matching policies
-	filterPatterns := []string{}
-
-	for _, p := range matchingPolicies {
-		if len(p.Filters) > 0 {
-			filterPatterns = append(filterPatterns, p.Filters...)
-		}
-	}
-
-	// If no filter patterns, allow all
-	if len(filterPatterns) == 0 {
-		if m, ok := data.(map[string]any); ok {
-			return m, nil
-		}
-		return notation.FilterMap(data, []string{"*"})
-	}
-
-	// Remove duplicates
-	uniquePatterns := make(map[string]bool)
-	var finalPatterns []string
-	for _, p := range filterPatterns {
-		if !uniquePatterns[p] {
-			uniquePatterns[p] = true
-			finalPatterns = append(finalPatterns, p)
-		}
-	}
-
-	return notation.FilterMap(data, finalPatterns)
-}
-
-// findMatchingPolicies finds policies in the grant that match the given key
-func (g *Grant) findMatchingPolicies(key CacheKey) []policy.Policy {
-	queryPolicy := policy.Policy{
-		Subject: key.Subject,
-		Action:  key.Action,
-		Object:  key.Object,
-	}
-
-	var matches []policy.Policy
-	pattern := queryPolicy.MatchPattern(key.Strict)
 
 	for _, p := range g.policies {
-		if pattern.MatchString(p.Key()) {
-			matches = append(matches, p)
+		g.Update(p)
+	}
+
+	// Find matching policies
+	var newPols []policy.Policy
+	cKeyPol := policy.Policy{
+		Subject: cKey.Subject,
+		Object:  cKey.Object,
+		Action:  cKey.Action,
+	}
+
+	if !cKey.Strict {
+		p := cKeyPol.Strictify()
+		newPols, _ = g.Get(p)
+	} else {
+		newPols, _ = g.Get(cKeyPol)
+	}
+
+	// Collect filter patterns
+	mapDatas := map[string]any{}
+	for _, p := range newPols {
+		globs := []string{}
+		if len(p.Filters) == 0 {
+			// No filters means allow all
+			if m, ok := data.(map[string]any); ok {
+				return m, nil
+			}
+			globs = append(globs, "*")
+		} else {
+			globs = append(globs, p.Filters...)
+		}
+
+		filtered, err := notation.FilterMap(data, globs)
+		if err != nil {
+			return nil, err
+		}
+
+		for k, vv := range filtered {
+			mapDatas[k] = vv
 		}
 	}
 
-	return matches
+	return mapDatas, nil
 }

@@ -1,10 +1,9 @@
-// policy/policy.go
 package policy
 
 import (
 	"fmt"
-	"regexp"
 	"strings"
+	"time"
 )
 
 // Policy defines an access control rule
@@ -22,7 +21,7 @@ type Policy struct {
 
 type TimeWindow struct {
 	CronExpr string
-	Duration int // Duration in seconds
+	Duration time.Duration
 }
 
 // Validate checks if the policy is well-formed
@@ -37,7 +36,7 @@ func (p *Policy) Validate() error {
 		return fmt.Errorf("policy object cannot be empty")
 	}
 
-	// Validate no embedded colons break our assumptions
+	// Validate no more than one colon
 	if strings.Count(p.Subject, ":") > 1 {
 		return fmt.Errorf("policy subject can contain at most one colon")
 	}
@@ -51,87 +50,42 @@ func (p *Policy) Validate() error {
 	return nil
 }
 
-// Key generates a unique identifier for this policy
-// Format: "subject:scope|action:scope|object:scope"
+// Key generates a unique identifier for this policy using your original format
 func (p *Policy) Key() string {
-	subMain, subScope := ParseComponent(p.Subject)
-	actMain, actScope := ParseComponent(p.Action)
-	objMain, objScope := ParseComponent(p.Object)
-
-	return fmt.Sprintf("%s:%s|%s:%s|%s:%s",
-		subMain, subScope, actMain, actScope, objMain, objScope)
+	subs := strings.Split(p.Subject, ":")
+	if len(subs) == 1 {
+		subs = append(subs, "NULL")
+	}
+	objs := strings.Split(p.Object, ":")
+	if len(objs) == 1 {
+		objs = append(objs, "ANY")
+	}
+	acts := strings.Split(p.Action, ":")
+	if len(acts) == 1 {
+		acts = append(acts, "ALL")
+	}
+	key := fmt.Sprintf("%s:%s:%s:%s:%s:%s", subs[0], subs[1], acts[0], acts[1], objs[0], objs[1])
+	return key
 }
 
-// ParseComponent extracts the main part and scope from a policy component
-// e.g., "user:admin" -> ("user", "admin"), "read" -> ("read", "")
-func ParseComponent(component string) (main, scope string) {
-	parts := strings.SplitN(component, ":", 2)
-	main = parts[0]
-	if len(parts) > 1 {
-		scope = parts[1]
+// Strictify converts a policy to use regex wildcards for non-strict matching
+func (p *Policy) Strictify() Policy {
+	subs := strings.Split(p.Subject, ":")
+	if len(subs) == 1 {
+		subs = append(subs, "NULL")
 	}
-	return
-}
-
-// MatchPattern creates a regex pattern for matching policies
-// When strict=false, wildcards match any scope; when true, exact match required
-func (p *Policy) MatchPattern(strict bool) *regexp.Regexp {
-	subMain, subScope := ParseComponent(p.Subject)
-	actMain, actScope := ParseComponent(p.Action)
-	objMain, objScope := ParseComponent(p.Object)
-
-	// Escape special regex characters in the main parts
-	subMain = regexp.QuoteMeta(subMain)
-	actMain = regexp.QuoteMeta(actMain)
-	objMain = regexp.QuoteMeta(objMain)
-
-	var pattern string
-	if strict {
-		// Strict mode: exact match including scopes
-		subScope = regexp.QuoteMeta(subScope)
-		actScope = regexp.QuoteMeta(actScope)
-		objScope = regexp.QuoteMeta(objScope)
-		pattern = fmt.Sprintf("^%s:%s\\|%s:%s\\|%s:%s$",
-			subMain, subScope, actMain, actScope, objMain, objScope)
-	} else {
-		// Non-strict: match any scope if not specified
-		subPattern := subMain + ":"
-		actPattern := actMain + ":"
-		objPattern := objMain + ":"
-
-		if subScope != "" {
-			subPattern += regexp.QuoteMeta(subScope)
-		} else {
-			subPattern += ".*"
-		}
-
-		if actScope != "" {
-			actPattern += regexp.QuoteMeta(actScope)
-		} else {
-			actPattern += ".*"
-		}
-
-		if objScope != "" {
-			objPattern += regexp.QuoteMeta(objScope)
-		} else {
-			objPattern += ".*"
-		}
-
-		pattern = fmt.Sprintf("^%s\\|%s\\|%s$",
-			subPattern, actPattern, objPattern)
+	objs := strings.Split(p.Object, ":")
+	if len(objs) == 1 {
+		objs = append(objs, "ANY")
+	}
+	acts := strings.Split(p.Action, ":")
+	if len(acts) == 1 {
+		acts = append(acts, "ALL")
 	}
 
-	// Compile once - panic if invalid since this is a programming error
-	re, err := regexp.Compile(pattern)
-	if err != nil {
-		panic(fmt.Sprintf("invalid regex pattern %q: %v", pattern, err))
+	return Policy{
+		Subject: fmt.Sprintf("%s:%s", subs[0], "\\w+"),
+		Object:  fmt.Sprintf("%s:%s", objs[0], "\\w+"),
+		Action:  fmt.Sprintf("%s:%s", acts[0], "\\w+"),
 	}
-
-	return re
-}
-
-// Matches checks if this policy matches another policy based on the strict mode
-func (p *Policy) Matches(other *Policy, strict bool) bool {
-	pattern := p.MatchPattern(strict)
-	return pattern.MatchString(other.Key())
 }
